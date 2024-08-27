@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 DEBUG=${DEBUG:-false}
+ISKINDLE4NT=${ISKINDLE4NT:-false}
 [ "$DEBUG" = true ] && set -x
 
 DIR="$(dirname "$0")"
@@ -7,13 +8,14 @@ DASH_PNG="$DIR/dash.png"
 FETCH_DASHBOARD_CMD="$DIR/local/fetch-dashboard.sh"
 LOW_BATTERY_CMD="$DIR/local/low-battery.sh"
 
-REFRESH_SCHEDULE=${REFRESH_SCHEDULE:-"2,32 8-17 * * MON-FRI"}
+REFRESH_SCHEDULE=${REFRESH_SCHEDULE:-"*/1 5-23 * * *"}
 FULL_DISPLAY_REFRESH_RATE=${FULL_DISPLAY_REFRESH_RATE:-0}
 SLEEP_SCREEN_INTERVAL=${SLEEP_SCREEN_INTERVAL:-3600}
+
 RTC=/sys/devices/platform/mxc_rtc.0/wakeup_enable
 
-LOW_BATTERY_REPORTING=${LOW_BATTERY_REPORTING:-false}
-LOW_BATTERY_THRESHOLD_PERCENT=${LOW_BATTERY_THRESHOLD_PERCENT:-10}
+LOW_BATTERY_REPORTING=${LOW_BATTERY_REPORTING:-true}
+LOW_BATTERY_THRESHOLD_PERCENT=${LOW_BATTERY_THRESHOLD_PERCENT:-15}
 
 num_refresh=0
 
@@ -27,7 +29,14 @@ init() {
 
   echo "Starting dashboard with $REFRESH_SCHEDULE refresh..."
 
-  /etc/init.d/framework stop
+#stop framework
+if [ "$ISKINDLE4NT" = true ]; then
+    /etc/init.d/framework stop #kindle NT4 code
+else
+    stop framework
+    stop lab126_gui #code for kindle paperwhite3
+fi
+  
   initctl stop webreader >/dev/null 2>&1
   echo powersave >/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
   lipc-set-prop com.lab126.powerd preventScreenSaver 1
@@ -89,8 +98,12 @@ rtc_sleep() {
   if [ "$DEBUG" = true ]; then
     sleep "$duration"
   else
-    # shellcheck disable=SC2039
-    [ "$(cat "$RTC")" -eq 0 ] && echo -n "$duration" >"$RTC"
+    if [ "$ISKINDLE4NT" = true ]; then
+		# shellcheck disable=SC2039
+		[ "$(cat "$RTC")" -eq 0 ] && echo -n "$duration" >"$RTC"
+	else
+		rtcwake -d /dev/rtc1 -m no -s "$duration"
+	fi
     echo "mem" >/sys/power/state
   fi
 }
